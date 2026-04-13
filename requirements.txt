@@ -1,0 +1,19 @@
+# 项目依赖
+
+# Claude API 客户端
+anthropic
+
+# Ollama 客户端
+ollama
+
+# 命令行工具
+click
+
+# 配置管理
+python-dotenv
+
+# 代码处理
+pygments
+
+# 测试
+pytest

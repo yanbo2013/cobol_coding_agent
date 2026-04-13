@@ -1,0 +1,16 @@
+# 虚拟环境
+venv/
+
+# 环境变量文件
+.env
+
+# IDE配置
+.vscode/
+.idea/
+
+# 临时文件
+*.pyc
+__pycache__/
+
+# 测试输出
+*.log
