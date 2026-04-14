@@ -1,10 +1,7 @@
 # 项目依赖
 
-# Claude API 客户端
-anthropic
-
-# Ollama 客户端
-ollama
+# OpenAI 兼容接口（支持ModelScope）
+openai
 
 # 命令行工具
 click

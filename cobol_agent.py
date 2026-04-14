@@ -9,8 +9,7 @@ COBOL Coding Agent
 
 import os
 import click
-import anthropic
-import ollama
+from openai import OpenAI
 from dotenv import load_dotenv
 from pygments import highlight
 from pygments.lexers import CobolLexer
@@ -22,77 +21,70 @@ load_dotenv()
 class CobolAgent:
     def __init__(self):
         """初始化COBOL代理"""
-        self.claude_client = None
-        self.ollama_client = None
+        self.openai_client = None
         self._initialize_clients()
     
     def _initialize_clients(self):
         """初始化API客户端"""
-        # 初始化Claude客户端
-        claude_api_key = os.getenv('ANTHROPIC_API_KEY')
-        if claude_api_key:
-            self.claude_client = anthropic.Anthropic(api_key=claude_api_key)
-        
-        # 初始化Ollama客户端
-        try:
-            self.ollama_client = ollama.Client()
-        except Exception as e:
-            print(f"警告: 无法连接到Ollama: {e}")
+        # 初始化OpenAI兼容客户端（用于ModelScope）
+        modelscope_api_key = os.getenv('MODELSCOPE_API_KEY')
+        if modelscope_api_key:
+            self.openai_client = OpenAI(
+                api_key=modelscope_api_key,
+                base_url="https://api-inference.modelscope.cn/v1"
+            )
+        else:
+            print("警告: 未设置MODELSCOPE_API_KEY环境变量")
     
-    def generate_cobol_code(self, prompt, model="claude-3-sonnet-20240229", temperature=0.7):
+    def generate_cobol_code(self, prompt, model="Qwen/Qwen3.5-35B-A3B", temperature=0.7):
         """生成COBOL代码"""
-        if self.claude_client:
-            return self._generate_with_claude(prompt, model, temperature)
-        elif self.ollama_client:
-            return self._generate_with_ollama(prompt, model, temperature)
+        if self.openai_client:
+            return self._generate_with_openai(prompt, model, temperature)
         else:
             raise Exception("没有可用的AI模型客户端")
     
-    def _generate_with_claude(self, prompt, model, temperature):
-        """使用Claude生成COBOL代码"""
-        message = self.claude_client.messages.create(
-            model=model,
-            max_tokens=4096,
-            temperature=temperature,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"作为COBOL编程专家，请根据以下需求生成COBOL代码:\n{prompt}"
-                }
-            ]
-        )
-        return message.content[0].text
-    
-    def _generate_with_ollama(self, prompt, model, temperature):
-        """使用Ollama生成COBOL代码"""
-        response = self.ollama_client.generate(
-            model=model,
-            prompt=f"作为COBOL编程专家，请根据以下需求生成COBOL代码:\n{prompt}",
-            options={"temperature": temperature}
-        )
-        return response["response"]
-    
-    def analyze_cobol_code(self, code, model="claude-3-sonnet-20240229"):
-        """分析COBOL代码"""
-        if self.claude_client:
-            message = self.claude_client.messages.create(
+    def _generate_with_openai(self, prompt, model, temperature):
+        """使用OpenAI兼容接口（ModelScope）生成COBOL代码"""
+        try:
+            response = self.openai_client.chat.completions.create(
                 model=model,
                 max_tokens=4096,
-                temperature=0.3,
+                temperature=temperature,
                 messages=[
                     {
                         "role": "user",
-                        "content": f"作为COBOL编程专家，请分析以下COBOL代码，指出潜在问题并提供改进建议:\n{code}"
+                        "content": f"作为COBOL编程专家，请根据以下需求生成纯COBOL代码，要求：\n1. 只输出COBOL代码，不要包含任何markdown格式或解释文字\n2. 符合COBOL编程规范和风格\n3. 包含必要的COBOL结构：IDENTIFICATION DIVISION, ENVIRONMENT DIVISION, DATA DIVISION, PROCEDURE DIVISION\n4. 代码可以直接编译和运行\n5. 适当添加注释说明\n\n需求：\n{prompt}"
                     }
                 ]
             )
-            return message.content[0].text
-        elif self.ollama_client:
-            response = self.ollama_client.generate(
-                model=model,
-                prompt=f"作为COBOL编程专家，请分析以下COBOL代码，指出潜在问题并提供改进建议:\n{code}"
-            )
-            return response["response"]
+            return response.choices[0].message.content
+        except Exception as e:
+            raise Exception(f"生成代码时出错: {str(e)}")
+    
+
+    
+
+    
+
+    
+    def analyze_cobol_code(self, code, model="Qwen/Qwen3.5-35B-A3B"):
+        """分析COBOL代码"""
+        if self.openai_client:
+            try:
+                response = self.openai_client.chat.completions.create(
+                    model=model,
+                    max_tokens=4096,
+                    temperature=0.3,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": f"作为COBOL编程专家，请分析以下COBOL代码，指出潜在问题并提供改进建议:\n{code}"
+                        }
+                    ]
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                raise Exception(f"分析代码时出错: {str(e)}")
         else:
             raise Exception("没有可用的AI模型客户端")
     
@@ -112,7 +104,7 @@ def cli():
 
 @cli.command()
 @click.option('--prompt', '-p', required=True, help='生成COBOL代码的提示')
-@click.option('--model', '-m', default='claude-3-sonnet-20240229', help='使用的模型')
+@click.option('--model', '-m', default='Qwen/Qwen3.5-35B-A3B', help='使用的模型')
 @click.option('--temperature', '-t', default=0.7, help='生成温度')
 @click.option('--output', '-o', help='输出文件')
 def generate(prompt, model, temperature, output):
@@ -135,7 +127,7 @@ def generate(prompt, model, temperature, output):
 
 @cli.command()
 @click.option('--file', '-f', required=True, help='COBOL代码文件')
-@click.option('--model', '-m', default='claude-3-sonnet-20240229', help='使用的模型')
+@click.option('--model', '-m', default='Qwen/Qwen3.5-35B-A3B', help='使用的模型')
 def analyze(file, model):
     """分析COBOL代码"""
     agent = CobolAgent()
